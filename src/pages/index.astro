@@ -2,6 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import Card from "../components/Card.astro";
 import { Octokit } from "octokit";
+import { Just, Maybe, Nothing, identity } from "purify-ts";
 type Repository = {
   id: {
     type: "integer";
@@ -605,6 +606,38 @@ const repositories = await octokit.request("GET /users/Lippiece/repos", {
 });
 ---
 
+<script>
+  import { identity } from "purify-ts";
+
+  const repositories = await octokit.request("GET /users/Lippiece/repos", {
+    username: "Lippiece",
+  });
+  const getScreenshot = async (url: string) => {
+    const browser = await puppeteer.launch({
+      headless: "new",
+      executablePath: "/usr/bin/chromium",
+    });
+    const page = await browser.newPage();
+    await page.goto(url);
+    const screenshot = await page.screenshot({ path: "screenshot.png" });
+    await browser.close();
+
+    return screenshot;
+  };
+  const local: string[] = JSON.parse(localStorage.getItem("screenshots"));
+  const maybeLocalScreenshots = Maybe.fromNullable(local);
+  const screenshots = maybeLocalScreenshots
+    .ifJust(identity)
+    .ifNothing(async () =>
+      repositories.data.map(
+        async repository => await getScreenshot(repository.homepage),
+      ),
+    )
+    .chain(screenshots =>
+      localStorage.setItem("screenshots", JSON.stringify(screenshots)),
+    );
+  console.debug(screenshots);
+</script>
 <Layout title="Welcome to Astro.">
   <main>
     <svg
@@ -645,7 +678,7 @@ const repositories = await octokit.request("GET /users/Lippiece/repos", {
       class="link-card-grid"
     >
       {
-        repositories.data.map((repository: Repository) => (
+        repositories.data.map((repository: Repository, index: number) => (
           <Card
             href={repository.html_url}
             title={repository.name}
